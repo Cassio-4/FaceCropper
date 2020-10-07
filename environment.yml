@@ -1,0 +1,13 @@
+name: FaceCropper
+channels:
+  - conda-forge
+  - anaconda
+dependencies:
+  - python=3.7
+  - opencv=4.4.0
+  - dlib
+  - tensorflow=2.*
+  - imutils
+  - pip
+  - pip:
+    - pyzm
