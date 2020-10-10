@@ -147,7 +147,7 @@ def process_event(event):
     for i, o in enumerate(disappeared_objs):
         found.append(o.centroid_when_registered)
         lost.append(o.centroid)
-       # cv2.imwrite('videos/output/{}{}.jpg'.format(event.name(), i))
+        cv2.imwrite('videos/output/{}{}.jpg'.format(event.name(), i), o.highest_detection)
 
     # Close video capture
     vc.release()
@@ -351,7 +351,7 @@ def run_test():
 
         # Show frame
         if config['TestInfo'].getboolean('show'):
-            frame_drawn = draw_boxes_on_image(frame, [b.bounding_box for b in to.values()], to.keys())
+            frame_drawn = draw_boxes_on_image(frame, to)
             cv2.imshow("Frame", frame_drawn)
 
         # Check if we're writing the frame on disc
