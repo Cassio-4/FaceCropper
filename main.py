@@ -29,7 +29,7 @@ print("[Global] Instantiating centroid tracker: Done")
 
 
 def process_event_batch(zm_events_batch):
-    # Start two dicts to keep the results from this batch
+    # Start two dicts to keep this batch's results
     batch_results_reg = {}
     batch_results_dereg = {}
     # For each event in the list process it and save results
@@ -58,7 +58,7 @@ def process_event(event):
     frame = frame[1]
 
     # Getting video dimensions
-    (H, W) = frame.shape[:2]
+    # (H, W) = frame.shape[:2]
 
     # Ordered dictionary of Trackable Objects
     to = OrderedDict()

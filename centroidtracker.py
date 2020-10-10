@@ -9,6 +9,12 @@ def deregister(obj_id, objects):
 	return objects.pop(obj_id)
 
 
+def calc_centroid(x, y, x1, y1):
+	cx = int((x + x1) / 2.0)
+	cy = int((y + y1) / 2.0)
+	return cx, cy
+
+
 class CentroidTracker:
 	"""
 	This class is the bread and butter of this program.
@@ -100,13 +106,11 @@ class CentroidTracker:
 		# centroids
 		else:
 			# initialize an array of input centroids for the current frame
-			input_centroids = np.zeros((len(rects), 2), dtype="int")
+			input_centroids = np.zeros((len(rects), 2), dtype=np.uint16)
 			# loop over the bounding box rectangles
 			for (i, (startX, startY, endX, endY)) in enumerate(rects):
 				# use the bounding box coordinates to derive the centroid
-				cx = int((startX + endX) / 2.0)
-				cy = int((startY + endY) / 2.0)
-				input_centroids[i] = (cx, cy)
+				input_centroids[i] = calc_centroid(startX, startY, endX, endY)
 
 			# grab the set of object IDs and corresponding centroids
 			object_ids = list(objects.keys())
