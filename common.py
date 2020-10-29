@@ -41,7 +41,6 @@ class TrackableObject:
         self.centroid = None
         self.set_bounding_box(bbox)
         # Flag used to indicate if the object is still active on the image
-        self.active = True
         self.disappeared_frames = 0
         self.highest_detection = None
         self.highest_detection_score = 0.0
@@ -54,3 +53,13 @@ class TrackableObject:
     def update_highest_detection(self, image, score):
         if score > self.highest_detection_score:
             self.highest_detection = image
+
+
+class ProcessedEvent:
+    """
+    A wrapper for processed events that holds the event itself
+    and its detections
+    """
+    def __init__(self, event, objects):
+        self.event = event
+        self.objects = objects
