@@ -9,6 +9,12 @@ def deregister(obj_id, objects):
 	return objects.pop(obj_id)
 
 
+def calc_centroid(x, y, x1, y1):
+	cx = int((x + x1) / 2.0)
+	cy = int((y + y1) / 2.0)
+	return cx, cy
+
+
 class CentroidTracker:
 	"""
 	This class is the bread and butter of this program.
@@ -43,14 +49,19 @@ class CentroidTracker:
 			bbox: ndarray uint16 with bounding box info
 				[left, top, right, bottom].
 			objects: OrderedDict of ids and TrackableObjects.
+			image_crop:
+			score:
 		"""
 		obj = TrackableObject(0, np.asarray(bbox, dtype=np.uint16))
 		# Save the centroid pos when the object was registered
 		obj.centroid_when_registered = obj.centroid
 		# Save the new TrackableObject in the dictionary
 		objects[self.next_id] = obj
+		# Update the next Id
 		self.next_id += 1
-		if not(image_crop is None) and not(score is None):
+		# If the b.box comes from a detector, then there is a score and a
+		# cropped image associated to it
+		if (image_crop is not None) and (score is not None):
 			obj.update_highest_detection(image_crop, score)
 
 	def no_bbox_input(self, objects):
@@ -69,11 +80,13 @@ class CentroidTracker:
 
 	def update(self, rects, objects, images=None, scores=None):
 		"""
+		Overloaded method
 		:param rects: bounding boxes [[x_left, y_top, x_right, y_bottom], ...]
-		:param objects: OrderedDictionary of id:TrackableObject
-
+		:param objects: OrderedDictionary of id:TrackableObject.
+		:param images: List of cropped images from frame.
+		:param scores: Scores of detections in images argument.
 		:return: modifies the objects associating boundingboxes,
-			centroids and Ids
+			centroids and Ids. Also returns a list of no longer active objects
 		"""
 		# check to see if the list of input bounding box rectangles
 		# is empty
@@ -83,16 +96,18 @@ class CentroidTracker:
 			return self.no_bbox_input(objects)
 
 		# if we are currently not tracking any objects take the input
-		# centroids and register each of them
+		# b.boxes and register each of them
 		if len(objects) == 0:
-			for i in range(0, len(rects)):
-				if not (images is None) and not(scores is None):
-					if not (images[i] is None) and not(scores[i] is None):
-						self.register(rects[i], objects, images[i], scores[i])
-					else:
-						self.register(rects[i], objects)
-				else:
+			# If there are no scores and detections
+			if (images is None) and (scores is None):
+				for i in range(0, len(rects)):
 					self.register(rects[i], objects)
+			# Else, the rects are coming from a detector, with cropped faces
+			# and scores to each cropping
+			else:
+				for i in range(0, len(rects)):
+					self.register(rects[i], objects, images[i], scores[i])
+			# Return an empty list since all objects are fresh
 			return []
 
 		# otherwise, we are currently tracking objects so we need to
@@ -100,13 +115,11 @@ class CentroidTracker:
 		# centroids
 		else:
 			# initialize an array of input centroids for the current frame
-			input_centroids = np.zeros((len(rects), 2), dtype="int")
+			input_centroids = np.zeros((len(rects), 2), dtype=np.uint16)
 			# loop over the bounding box rectangles
 			for (i, (startX, startY, endX, endY)) in enumerate(rects):
 				# use the bounding box coordinates to derive the centroid
-				cx = int((startX + endX) / 2.0)
-				cy = int((startY + endY) / 2.0)
-				input_centroids[i] = (cx, cy)
+				input_centroids[i] = calc_centroid(startX, startY, endX, endY)
 
 			# grab the set of object IDs and corresponding centroids
 			object_ids = list(objects.keys())
@@ -156,7 +169,9 @@ class CentroidTracker:
 				object_id = object_ids[row]
 				objects[object_id].set_bounding_box(rects[col])
 				objects[object_id].disappeared_frames = 0
-				if not (images is None):
+				# If the b.boxes came from a detector then associate the
+				# cropped image and score to this object as well
+				if images is not None and images[col] is not None:
 					objects[object_id].update_highest_detection(images[col], scores[col])
 
 				# Indicate that we have examined each of the row and
@@ -193,7 +208,7 @@ class CentroidTracker:
 			# register each new input centroid as a trackable object
 			else:
 				for col in unused_cols:
-					if not (images is None):
+					if images is not None:
 						self.register(rects[col], objects, images[col], scores[col])
 					else:
 						self.register(rects[col], objects)

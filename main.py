@@ -1,8 +1,14 @@
+from Detectors.detectors_tensorflow import FaceboxesTensorflow
 from zm_wrappers.pyzm_wrappers import MyMonitor
 from centroidtracker import CentroidTracker
 from collections import OrderedDict
-from grid import Grid
+from common import ProcessedEvent
+from requests.exceptions import Timeout, ConnectionError
+from getpass import getpass
 import configparser
+import requests
+import base64
+import json
 import dlib
 import cv2
 
@@ -12,53 +18,57 @@ config.read('config.ini')
 print("[Global] reading config file: Done")
 # Instantiate face detector
 print("[Global] Instantiating face detector")
-if config['DEFAULT']['detector'] == 'FaceBoxes':
-    from Detectors.detectors_tensorflow import FaceboxesTensorflow
-    print("[Global] Using FaceBoxes model.")
-    face_detector = FaceboxesTensorflow(config['FaceboxesTensorflow']['weights_path'])
-else:
-    from Detectors.opencv_dnn_detectors import OpenCV_DNN_Caffe_SSD
-    print("[Global] Using Caffe OpencvDNN.")
-    face_detector = OpenCV_DNN_Caffe_SSD(config['OpenCVDNNCaffeModel']['weights_path'],
-                                         config['OpenCVDNNCaffeModel']['model_conf'])
+print("[Global] Using FaceBoxes model.")
+face_detector = FaceboxesTensorflow(config['FaceboxesTensorflow']['weights_path'])
 print("[Global] Instantiating face detector: Done")
 # Instantiate Centroid Tracker for ID assignment
 print("[Global] Instantiating centroid tracker: Done")
-centroid_tracker = CentroidTracker(max_disappeared=40, max_distance=50)
+centroid_tracker = CentroidTracker(config['DEFAULT'].getint('max_disappeared'),
+                                   config['DEFAULT'].getint('max_distance'))
 print("[Global] Instantiating centroid tracker: Done")
+SHOW_EVENT = config['DEFAULT'].getboolean('show_event_processing')
+SAVE_DETECTIONS = config['DEFAULT'].getboolean('save_detections')
+
+
+def process_passive_monitors(passive_monitors):
+    print("It's late, processing passive monitors")
+    event_filter = {
+        'from': "24 hours ago",
+        'object_only': False,
+        'min_alarmed_frames': 1
+    }
+
+    event_batch = []
+    # Get all events and create a batch
+    for monitor in passive_monitors.values():
+        print('Getting events for {}.'.format(monitor.zm_monitor.name()))
+        cam_events = monitor.zm_monitor.events(options=event_filter)
+        for event in cam_events.list():
+            event_batch.append(event)
+            print('Event:{} Cause:{} Notes:{}'.format(event.name(), event.cause(), event.notes()))
+    # Send batch to be processed
+    batch_result = process_event_batch(event_batch)
+    process_batch_result(batch_result, passive_monitors)
+    print("Processing passive monitors: Done")
 
 
 def process_event_batch(zm_events_batch):
-    # Start two dicts to keep the results from this batch
-    batch_results_reg = {}
-    batch_results_dereg = {}
     # For each event in the list process it and save results
+    batch_result = []
     for ev in zm_events_batch:
-        found, lost = process_event(ev)
-        # If this id has never been used before then create an empty list
-        # in the dictionary where to store centroids
-        if batch_results_reg.get(ev.monitor_id()) is None or \
-                batch_results_dereg.get(ev.monitor_id()) is None:
-            batch_results_dereg[ev.monitor_id()] = []
-            batch_results_reg[ev.monitor_id()] = []
-        batch_results_reg[ev.monitor_id()].extend(found)
-        batch_results_dereg[ev.monitor_id()].extend(lost)
-    # Return the report to main loop so we can write results on to the grid
-    return batch_results_reg, batch_results_dereg
+        processed_ev = process_event(ev)
+        batch_result.append(processed_ev)
+    # Return the report to main loop
+    return batch_result
 
 
 def process_event(event):
     # Get file system path where event is stored
-    path = event.fspath()
+    path = event.fspath() + '/' + event.video_file()
     # Open video file
     print("Opening event at {}".format(path))
     vc = cv2.VideoCapture(path)
     print("Opening event at {}: Done".format(path))
-    frame = vc.read()
-    frame = frame[1]
-
-    # Getting video dimensions
-    (H, W) = frame.shape[:2]
 
     # Ordered dictionary of Trackable Objects
     to = OrderedDict()
@@ -100,7 +110,7 @@ def process_event(event):
                 trackers.append(tracker)
                 # Add the bounding box coordinates to the rectangles list
                 rects.append((left_x, top_y, right_x, bottom_y))
-                crop_img = frame[top_y-5:bottom_y+5, left_x-5:right_x+5]
+                crop_img = frame[top_y - 5:bottom_y + 5, left_x - 5:right_x + 5]
                 crops.append(crop_img)
 
             # Update each object based on recent detections
@@ -126,79 +136,104 @@ def process_event(event):
         # Update total frames
         total_frames += 1
 
-    # If there are still trackable objects that were not deregistered during
-    # the event processing phase, redirect them to the disappeared_objs
-    # list, since there is no way to track them among events.
-    for key in to.keys():
-        disappeared_objs.append(to.pop(key))
-    # With the event processed we have all the objects that were tracked,
-    # their info, centroid data and highest scoring image.
-    # Now, to finish processing them and return the centroids to
-    # annotate on the grid
-
-    # First save/send the highest scoring image to ATENTO
-    # Todo study protocol to send image and finding the highest score image
-    #cv2.imwrite()
-
-    # Now, build two lists with centroid info of where the object was first
-    # registered and where it was deregistered
-    lost = []
-    found = []
-    for i, o in enumerate(disappeared_objs):
-        found.append(o.centroid_when_registered)
-        lost.append(o.centroid)
-       # cv2.imwrite('videos/output/{}{}.jpg'.format(event.name(), i))
+        if SHOW_EVENT:
+            cv2.imshow(event.name(), frame)
+            _ = cv2.waitKey(1) & 0xFF
+    centroid_tracker.reset_id_count()
+    if SHOW_EVENT:
+        cv2.destroyAllWindows()
 
     # Close video capture
     vc.release()
+
+    # If there are still trackable objects that were not deregistered during
+    # the event processing phase, redirect them to the disappeared_objs
+    # list, since there is no way to track them among events.
+    for key in list(to.keys()):
+        disappeared_objs.append(to.pop(key))
+    # With the event processed we have all the objects that were tracked,
+    # their info, centroid data and highest scoring image.
+    # Create a ProcessedEvent object, responsible for storing the event along
+    # with the objects detected and their information
     print("Finished processing event {}.".format(event.name()))
     # Return the list with all the centroids info
-    return found, lost
+    return ProcessedEvent(event, disappeared_objs)
+
+
+def process_batch_result(batch_result, monitors):
+    """
+    Processes the results from a batch of events, being responsible for
+    mounting and sending info to ATENTO
+
+    :param batch_result: a list of ProcessedEvent objects
+    :param monitors: a dict of monitors
+    :return:
+    """
+    # For processed event in a batch result
+    for pe in batch_result:
+        # Grab this event's monitor name
+        monitor_name = monitors.get(pe.event.monitor_id()).zm_monitor.name()
+        # For each detection in this event
+        for obj in pe.objects:
+            # Encode the highest scoring image in base64 to be sent in a JSON request
+            # https://stackoverflow.com/questions/40928205/python-opencv-image-to-byte-string-for-json-transfer
+            _, buffer = cv2.imencode('.png', obj.highest_detection)
+            b64_image = base64.b64encode(buffer)
+            b64_image_with_prefix = "data:image/png;base64," + b64_image.decode("utf-8")
+            # Build the JSON
+            packet = {
+                "requestNumber": 00,
+                "companyCode": 4,
+                "dispositiveType": 2,
+                "captureDeviceCode": monitor_name,
+                "appCode": 7,
+                "latitude": "null",
+                "longitude": "null",
+                "personalType": 1,
+                "flagFace": 1,
+                "trueImage": b64_image_with_prefix,
+                "truePictureTree": "99",
+                # "atributesPerson": [{"atribute": "Age", "value": 31}, {"atribute": "Color", "value": 1},
+                #                    {"atribute": "Sex", "value": "1"}, {"atribute": "Direction", "value": 2}]
+            }
+            # Send it to ATENTO API
+            headers = {'content-type': 'application/json; charset=UTF-8'}
+            try:
+                response = requests.post('https://www.atento.inf.br/api', data=json.dumps(packet),
+                                         headers=headers, verify=False)
+            except Timeout:
+                print("(process_batch_result()): request Timed Out.")
+            except ConnectionError:
+                print("(process_batch_result()): Connection error.")
+            else:
+                print(response.content)
+            if SAVE_DETECTIONS:
+                cv2.imwrite("output/{}{}.jpg".format(pe.event.name(), obj.id), obj.highest_detection)
+        with open('output/log.txt', 'a+') as log:
+            log.write("{} processed: {} objects found\n".format(pe.event.name(), len(pe.objects)))
 
 
 def run_module():
-    import pyzm
+    from cachetools import TTLCache
     import pyzm.api as zmapi
     import traceback
+    import schedule
+    import pyzm
     import time
-
-    use_zmlog = False
-    has_zmlog = False
+    import datetime
 
     # Mounting list of passive monitors from config file
     passive_monitors_string = config['ZMInfo']['passive_monitors_list'].split(',')
     passive_monitors_ids = [int(m) for m in passive_monitors_string]
 
     print('Using pyzm version: {}'.format(pyzm.__version__))
-    if use_zmlog:
-        try:
-            import pyzm.ZMLog as zmlog  # only if you want to log to ZM
-            has_zmlog = True
-        except ImportError as e:
-            print('Could not import ZMLog, function will be disabled:' + str(e))
-            zmlog = None
-
-    # This is for logging in to ZM
-    print("Initing Log")
-    zm_log_override = {
-        'log_level_syslog': 3,
-        'log_level_db': -5,
-        'log_debug': 1,
-        # 'log_level_file': -5,
-        'log_debug_target': None
-    }
-    # Todo Having issues with logging initialization
-    if has_zmlog:
-        zmlog.init(name='FaceCropper', override=zm_log_override)
-        print("Initing Log: Done")
-    # Todo Ask user to input password, instead of having it on a .ini file (security reasons, obviously)
+    password = getpass("Please enter your password to access your Zoneminder server: ")
     api_options = {
         'apiurl': config['ZMInfo']['apiurl'],
         'portalurl': config['ZMInfo']['portalurl'],
         'user': config['ZMInfo']['user'],
-        'password': config['ZMInfo']['password'],
-        'logger': None,  # use none if you don't want to log to ZM,
-        # 'disable_ssl_cert_check': True
+        'password': password,
+        'logger': None
     }
 
     print('Running FaceCropper on {}'.format(api_options['apiurl']))
@@ -214,7 +249,7 @@ def run_module():
     passive_monitors = {}
     # Get all monitors and build all monitor objects
     print("Getting monitors")
-    zm_monitors = zmapi.Monitors()
+    zm_monitors = zmapi.monitors()
     for m in zm_monitors.list():
         print('Name:{} Enabled:{} Type:{} Dims:{}'.format(m.name(), m.enabled(), m.type(), m.dimensions()))
         print(m.status())
@@ -230,34 +265,46 @@ def run_module():
 
     # Starting the events filter
     event_filter = {
-        'from': '24 hours ago',
+        'from': None,
+        'to': None,
         'object_only': False,
-        'min_alarmed_frames': 1,
-        'max_events': 5,
+        'min_alarmed_frames': 1
     }
 
-    # Starting auxiliary structures
-    received_events_ids = []
+    # Before entering the main loop, schedule te passive monitors
+    schedule.every().day.at("00:00").do(process_passive_monitors, passive_monitors)
 
+    # This is a little cache to remember what events were
+    # received in the previous calls, each cached id lasts for 15 minutes(900s)
+    received_events_ids = TTLCache(maxsize=200, ttl=900)
+
+    # =============== MAIN LOOP ===============
     print("Pooling for events")
-    start_time = time.time()
     while True:
-        time.sleep(60.0 - ((time.time() - start_time) % 60.0))
+        time.sleep(config['ZMInfo'].getfloat('pooling_time'))
+        now = datetime.datetime.now()
+        ago = now - datetime.timedelta(minutes=12)
+        event_filter['from'] = "{}-{}-{} {}:{}:{}".format(ago.year, ago.month, ago.day, ago.hour, ago.minute,
+                                                          ago.second)
+        event_filter['to'] = "{}-{}-{} {}:{}:{}".format(now.year, now.month, now.day, now.hour, now.minute,
+                                                        now.second)
         print("Getting events for active monitors")
-        # TODO alter filter accordingly
-        # event_filter['from'] = something
         event_batch = []
         # Get all events and create a batch
         for monitor in active_monitors.values():
             print('Getting events for {}.'.format(monitor.zm_monitor.name()))
             cam_events = monitor.zm_monitor.events(options=event_filter)
             for event in cam_events.list():
-                event_batch.append(event)
-                print('Event:{} Cause:{} Notes:{}'.format(event.name(), event.cause(), event.notes()))
+                if event.id() not in received_events_ids:
+                    received_events_ids[event.id()] = event.id()
+                    event_batch.append(event)
+                    print('Event:{} Cause:{} Notes:{}'.format(event.name(), event.cause(), event.notes()))
         # Send batch to be processed
-        process_event_batch(event_batch)
-        # TODO Grab batch results and send to respective Grid
-        zmlog.close()
+        print("Batch has {} events, processing".format(len(event_batch)))
+        batch_result = process_event_batch(event_batch)
+        print("Batch processing: Done")
+        # Process the results of a batch
+        process_batch_result(batch_result, active_monitors)
 
 
 def run_test():
@@ -280,10 +327,6 @@ def run_test():
         fourcc = cv2.VideoWriter_fourcc(*"MJPG")
         writer = cv2.VideoWriter(config['TestInfo']["recording_path"], fourcc, 30, (W, H), True)
 
-    # Instanciar o rastreador de centroides
-    ct = CentroidTracker(max_disappeared=40, max_distance=50)
-    # Instantiate grid
-    grid = Grid((H, W))
     # Ordered dictionary of Trackable Objects
     to = OrderedDict()
 
@@ -349,9 +392,9 @@ def run_test():
             # Update each object based on recent detections
             disappeared_objs.extend(centroid_tracker.update(rects, to))
 
+        frame_drawn = draw_boxes_on_image(frame, to)
         # Show frame
         if config['TestInfo'].getboolean('show'):
-            frame_drawn = draw_boxes_on_image(frame, [b.bounding_box for b in to.values()], to.keys())
             cv2.imshow("Frame", frame_drawn)
 
         # Check if we're writing the frame on disc
