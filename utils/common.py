@@ -60,6 +60,7 @@ class ProcessedEvent:
     A wrapper for processed events that holds the event itself
     and its detections
     """
-    def __init__(self, event, objects):
+    def __init__(self, event, objects, alarmed_frame=None):
         self.event = event
         self.objects = objects
+        self.alarmed_frame = alarmed_frame

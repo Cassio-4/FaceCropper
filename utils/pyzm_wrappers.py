@@ -1,5 +1,5 @@
 from pyzm.helpers.Monitor import Monitor
-from grid import Grid
+from utils.grid import Grid
 
 
 class MyMonitor:

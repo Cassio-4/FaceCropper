@@ -1,5 +1,5 @@
 from scipy.spatial import distance as dist
-from common import TrackableObject
+from utils.common import TrackableObject
 import numpy as np
 
 
