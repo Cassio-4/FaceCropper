@@ -29,7 +29,6 @@ if RUN_TEST:
     RECORD_TEST = config['TestInfo'].getboolean('record_test')
     RECORDING_PATH = config['TestInfo']["recording_path"]
     SHOW_TEST = config['TestInfo'].getboolean('show')
-    pass
 
 else:
     # Mounting list of passive monitors from config file
@@ -41,6 +40,8 @@ else:
     POOLING_TIME = config['ZMInfo'].getfloat('pooling_time')
     SHOW_EVENT = config['ZMInfo'].getboolean('show_event_processing')
     SAVE_DETECTIONS = config['ZMInfo'].getboolean('save_detections')
+    DELETE_PROCESSED_EVENTS = config['ZMInfo'].getboolean('delete_processed_events')
+
 print("[Global] Setting global variables: Done")
 
 # Clean trash

@@ -116,7 +116,7 @@ def process_event(event):
             disappeared_objs.extend(config.CENTROID_TRACKER.update(rects, to))
 
         # save first alarmed frame?
-        if total_frames == 5:
+        if total_frames == 3 or total_frames == 5:
             alarmed_frame = frame
         # Update total frames
         total_frames += 1
@@ -216,7 +216,8 @@ def process_batch_result(batch_result, monitors):
 
                 if config.SAVE_DETECTIONS:
                     cv2.imwrite("output/{}{}.jpg".format(pe.event.name(), obj.id), obj.highest_detection)
-
+        if config.DELETE_PROCESSED_EVENTS:
+            pe.event.delete()
         with open('output/log.txt', 'a+') as log:
             log.write("{} processed: {} objects found\n".format(pe.event.name(), len(pe.objects)))
 
@@ -249,7 +250,7 @@ def login_with_api():
 
 def update_event_filter(event_filter):
     now = datetime.datetime.now()
-    ago = now - datetime.timedelta(minutes=12)
+    ago = now - datetime.timedelta(hours=12)
     event_filter['from'] = "{}-{}-{} {}:{}:{}".format(ago.year, ago.month, ago.day, ago.hour, ago.minute,
                                                       ago.second)
     event_filter['to'] = "{}-{}-{} {}:{}:{}".format(now.year, now.month, now.day, now.hour, now.minute,
