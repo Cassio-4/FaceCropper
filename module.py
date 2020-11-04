@@ -1,6 +1,6 @@
 from requests.exceptions import Timeout, ConnectionError
 from utils.pyzm_wrappers import MyMonitor
-from utils.common import ProcessedEvent
+from utils.common import ProcessedEvent, draw_boxes_on_image
 from collections import OrderedDict
 import datetime
 import requests
@@ -12,7 +12,7 @@ import cv2
 
 
 def process_passive_monitors(passive_monitors):
-    print("It's late, processing passive monitors")
+    config.LOGGER.Info("It's late, processing passive monitors")
     event_filter = {
         'from': "24 hours ago",
         'object_only': False,
@@ -30,7 +30,7 @@ def process_passive_monitors(passive_monitors):
     # Send batch to be processed
     batch_result = process_event_batch(event_batch)
     process_batch_result(batch_result, passive_monitors)
-    print("Processing passive monitors: Done")
+    config.LOGGER.Info("Processing passive monitors: Done")
 
 
 def process_event_batch(zm_events_batch):
@@ -47,9 +47,9 @@ def process_event(event):
     # Get file system path where event is stored
     path = event.fspath() + '/' + event.video_file()
     # Open video file
-    print("Opening event at {}".format(path))
+    config.LOGGER.Debug(1, "Opening event at {}".format(path))
     vc = cv2.VideoCapture(path)
-    print("Opening event at {}: Done".format(path))
+    config.LOGGER.Debug(1, "Opening event at {}: Done".format(path))
 
     # Ordered dictionary of Trackable Objects
     to = OrderedDict()
@@ -60,7 +60,7 @@ def process_event(event):
     trackers = []
     disappeared_objs = []
     alarmed_frame = None
-    print("Processing event {}.".format(event.name()))
+    config.LOGGER.Info("Processing event {}.".format(event.name()))
     # Comecar a ler os frames
     while True:
         frame = vc.read()
@@ -122,7 +122,8 @@ def process_event(event):
         total_frames += 1
 
         if config.SHOW_EVENT:
-            cv2.imshow(event.name(), frame)
+            drawn_frame = draw_boxes_on_image(frame, to)
+            cv2.imshow(event.name(), drawn_frame)
             _ = cv2.waitKey(1) & 0xFF
     config.CENTROID_TRACKER.reset_id_count()
     if config.SHOW_EVENT:
@@ -140,7 +141,8 @@ def process_event(event):
     # their info, centroid data and highest scoring image.
     # Create a ProcessedEvent object, responsible for storing the event along
     # with the objects detected and their information
-    print("Finished processing event {}.".format(event.name()))
+    config.LOGGER.Info("Processing event {}: Done.".format(event.name()))
+    config.LOGGER.log_detector(event.name(), len(disappeared_objs))
     # Return the list with all the centroids info
     return ProcessedEvent(event, disappeared_objs, alarmed_frame=alarmed_frame)
 
@@ -156,15 +158,16 @@ def encode_image_base64(image):
 
 def send_packet(packet):
     headers = {'content-type': 'application/json; charset=UTF-8'}
+    config.LOGGER.log_JSON(packet)
     try:
         response = requests.post('https://www.atento.inf.br/api', data=json.dumps(packet),
                                  headers=headers, verify=False)
     except Timeout:
-        print("(process_batch_result()): request Timed Out.")
+        config.LOGGER.Error("Request Timed Out.")
     except ConnectionError:
-        print("(process_batch_result()): Connection error.")
+        config.LOGGER.Error("Connection error.")
     else:
-        print(response.content)
+        config.LOGGER.log_JSON(response.content.decode('utf-8'))
 
 
 def process_batch_result(batch_result, monitors):
@@ -189,22 +192,23 @@ def process_batch_result(batch_result, monitors):
             "appCode": 7,
             "latitude": "null",
             "longitude": "null",
-            "personalType": 1,
             "truePictureTree": "99"
         }
         # If there were no detections, we will send an alarmed frame of this event
         if len(pe.objects) == 0:
             packet["flagFace"] = 0
             if pe.alarmed_frame is None:
-                print("[ERROR] Alarmed Frame not obtained for event {}\n".format(pe.event.name()))
+                config.LOGGER.Error("Alarmed Frame not obtained for event {}\n".format(pe.event.name()))
             else:
                 packet["trueImage"] = encode_image_base64(pe.alarmed_frame)
                 send_packet(packet)
+        # If there were detections, flagFace = 1 and send image
         else:
             # For each detection in this event
+            packet["flagFace"] = 1
+            packet["personalType"] = 1
             for obj in pe.objects:
                 # Add to JSON
-                packet["flagFace"] = 1
                 packet["trueImage"] = encode_image_base64(obj.highest_detection)
                 # packet["atributesPerson"] = [{"atribute": "Age", "value": 31},
                 #                            {"atribute": "Color", "value": 1},
@@ -218,8 +222,6 @@ def process_batch_result(batch_result, monitors):
                     cv2.imwrite("output/{}{}.jpg".format(pe.event.name(), obj.id), obj.highest_detection)
         if config.DELETE_PROCESSED_EVENTS:
             pe.event.delete()
-        with open('output/log.txt', 'a+') as log:
-            log.write("{} processed: {} objects found\n".format(pe.event.name(), len(pe.objects)))
 
 
 def login_with_api():
@@ -233,10 +235,13 @@ def login_with_api():
         'portalurl': config.PORTAL_URL,
         'user': config.USER,
         'password': password,
-        'logger': None
+        'logger': config.LOGGER
     }
+    if config.DISABLE_SSL:
+        api_options['disable_ssl_cert_check'] = True
 
-    print('Running FaceCropper on {}'.format(api_options['apiurl']))
+    config.LOGGER.Info('Running FaceCropper on {}'.format(api_options['apiurl']))
+
     # lets init the API
     try:
         zmapi = zmapi.ZMApi(options=api_options)
@@ -263,26 +268,26 @@ def run_module():
     import pyzm
     import time
 
-    print('Using pyzm version: {}'.format(pyzm.__version__))
+    config.LOGGER.Info('Using pyzm version: {}'.format(pyzm.__version__))
     zmapi = login_with_api()
 
     active_monitors = {}
     passive_monitors = {}
     # Get all monitors and build all monitor objects
-    print("Getting monitors")
+    config.LOGGER.Info("Getting monitors")
     zm_monitors = zmapi.monitors()
     for m in zm_monitors.list():
-        print('Name:{} Enabled:{} Type:{} Dims:{}'.format(m.name(), m.enabled(), m.type(), m.dimensions()))
-        print(m.status())
+        # print('Name:{} Enabled:{} Type:{} Dims:{}'.format(m.name(), m.enabled(), m.type(), m.dimensions()))
+        # print(m.status())
         # Wrapping monitors along with their grids and separating according
         # to active and passive categories
         if m.id() in config.PASSIVE_MONITORS:
-            print('Monitor: {} [id: {}] is a passive monitor.'.format(m.name(), m.id()))
+            config.LOGGER.Debug(1, 'Monitor: {} [id: {}] is a passive monitor.'.format(m.name(), m.id()))
             passive_monitors[m.id()] = MyMonitor(m)
         else:
-            print('Monitor: {} [id: {}] is an active monitor.'.format(m.name(), m.id()))
+            config.LOGGER.Debug(1, 'Monitor: {} [id: {}] is an active monitor.'.format(m.name(), m.id()))
             active_monitors[m.id()] = MyMonitor(m)
-    print("Getting monitors: Done")
+    config.LOGGER.Info("Getting monitors: Done")
 
     # Starting the events filter
     event_filter = {
@@ -301,25 +306,26 @@ def run_module():
 
     # =============== MAIN LOOP ===============
     while True:
-        print("Pooling for events")
+        config.LOGGER.Info("Pooling for events")
         time.sleep(config.POOLING_TIME)
 
         update_event_filter(event_filter)
 
-        print("Getting events for active monitors")
+        config.LOGGER.Info("Getting events for active monitors")
         event_batch = []
         # Get all events and create a batch
         for monitor in active_monitors.values():
-            print('Getting events for {}.'.format(monitor.zm_monitor.name()))
+            config.LOGGER.Debug(1, 'Getting events for {}.'.format(monitor.zm_monitor.name()))
             cam_events = monitor.zm_monitor.events(options=event_filter)
             for event in cam_events.list():
                 if event.id() not in received_events_ids:
                     received_events_ids[event.id()] = event.id()
                     event_batch.append(event)
-                    print('Event:{} Cause:{} Notes:{}'.format(event.name(), event.cause(), event.notes()))
+                    config.LOGGER.Debug(1, 'Event:{} Cause:{} Notes:{}'.format(event.name(),
+                                                                               event.cause(), event.notes()))
         # Send batch to be processed
-        print("Batch has {} events, processing".format(len(event_batch)))
+        config.LOGGER.Info("Batch has {} events, processing".format(len(event_batch)))
         batch_result = process_event_batch(event_batch)
-        print("Batch processing: Done")
+        config.LOGGER.Info("Batch processing: Done")
         # Process the results of a batch
         process_batch_result(batch_result, active_monitors)

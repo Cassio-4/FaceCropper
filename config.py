@@ -1,5 +1,6 @@
 from detectors.detectors_tensorflow import FaceboxesTensorflow
 from utils.centroidtracker import CentroidTracker
+from utils.pyzm_wrappers import Logger
 import configparser
 
 print("[Global] reading config file")
@@ -37,11 +38,12 @@ else:
     API_URL = config['ZMInfo']['apiurl']
     PORTAL_URL = config['ZMInfo']['portalurl']
     USER = config['ZMInfo']['user']
+    DISABLE_SSL = config['ZMInfo'].getboolean('ssl_check')
     POOLING_TIME = config['ZMInfo'].getfloat('pooling_time')
     SHOW_EVENT = config['ZMInfo'].getboolean('show_event_processing')
     SAVE_DETECTIONS = config['ZMInfo'].getboolean('save_detections')
     DELETE_PROCESSED_EVENTS = config['ZMInfo'].getboolean('delete_processed_events')
-
+    LOGGER = Logger(config['Logger'].getboolean('debug'), config['Logger'].getboolean('save_json'))
 print("[Global] Setting global variables: Done")
 
 # Clean trash
