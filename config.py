@@ -38,7 +38,7 @@ else:
     API_URL = config['ZMInfo']['apiurl']
     PORTAL_URL = config['ZMInfo']['portalurl']
     USER = config['ZMInfo']['user']
-    DISABLE_SSL = config['ZMInfo'].getboolean('ssl_check')
+    DISABLE_SSL = config['ZMInfo'].getboolean('disable_ssl')
     POOLING_TIME = config['ZMInfo'].getfloat('pooling_time')
     SHOW_EVENT = config['ZMInfo'].getboolean('show_event_processing')
     SAVE_DETECTIONS = config['ZMInfo'].getboolean('save_detections')

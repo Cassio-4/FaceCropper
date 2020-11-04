@@ -150,10 +150,14 @@ def process_event(event):
 def encode_image_base64(image):
     # Encode the highest scoring image in base64 to be sent in a JSON request
     # https://stackoverflow.com/questions/40928205/python-opencv-image-to-byte-string-for-json-transfer
-    _, buffer = cv2.imencode('.png', image)
-    b64_image = base64.b64encode(buffer)
-    b64_image_with_prefix = "data:image/png;base64," + b64_image.decode("utf-8")
-    return b64_image_with_prefix
+    try:
+        _, buffer = cv2.imencode('.png', image)
+        b64_image = base64.b64encode(buffer)
+        b64_image_with_prefix = "data:image/png;base64," + b64_image.decode("utf-8")
+        return b64_image_with_prefix
+    except cv2.error as e:
+        config.LOGGER.Error(e)
+        return None
 
 
 def send_packet(packet):
@@ -201,6 +205,9 @@ def process_batch_result(batch_result, monitors):
                 config.LOGGER.Error("Alarmed Frame not obtained for event {}\n".format(pe.event.name()))
             else:
                 packet["trueImage"] = encode_image_base64(pe.alarmed_frame)
+                if packet["trueImage"] is None:
+                    config.LOGGER.Error("unable to encode image")
+                    continue
                 send_packet(packet)
         # If there were detections, flagFace = 1 and send image
         else:
@@ -210,6 +217,9 @@ def process_batch_result(batch_result, monitors):
             for obj in pe.objects:
                 # Add to JSON
                 packet["trueImage"] = encode_image_base64(obj.highest_detection)
+                if packet["trueImage"] is None:
+                    config.LOGGER.Error("unable to encode image")
+                    continue
                 # packet["atributesPerson"] = [{"atribute": "Age", "value": 31},
                 #                            {"atribute": "Color", "value": 1},
                 #                            {"atribute": "Sex", "value": "1"},
