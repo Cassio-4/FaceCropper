@@ -92,11 +92,11 @@ def process_event(event):
                 trackers.append(tracker)
                 # Add the bounding box coordinates to the rectangles list
                 rects.append((left_x, top_y, right_x, bottom_y))
-                crop_img = frame  # [top_y - 5:bottom_y + 5, left_x - 5:right_x + 5]
+                crop_img = frame[top_y - 5:bottom_y + 5, left_x - 5:right_x + 5]
                 crops.append(crop_img)
 
             # Update each object based on recent detections
-            disappeared_objs.extend(config.CENTROID_TRACKER.update(rects, to, crops, scores))
+            disappeared_objs.extend(config.CENTROID_TRACKER.update(rects, to, crops, frame.copy(), scores))
 
         # Else, update trackers
         else:
@@ -216,7 +216,8 @@ def process_batch_result(batch_result, monitors):
             packet["personalType"] = 1
             for obj in pe.objects:
                 # Add to JSON
-                packet["trueImage"] = encode_image_base64(obj.highest_detection)
+                packet["trueImage"] = encode_image_base64(obj.highest_detection_frame)
+                packet["cropFace"] = encode_image_base64(obj.highest_detection_crop)
                 if packet["trueImage"] is None:
                     config.LOGGER.Error("unable to encode image")
                     continue
@@ -229,7 +230,9 @@ def process_batch_result(batch_result, monitors):
                 send_packet(packet)
 
                 if config.SAVE_DETECTIONS:
-                    cv2.imwrite("output/{}{}.jpg".format(pe.event.name(), obj.id), obj.highest_detection)
+                    cv2.imwrite("output/{}{}.jpg".format(pe.event.name(), obj.id), obj.highest_detection_crop)
+                    cv2.imwrite("output/trueImage{}{}.jpg".format(pe.event.name(), obj.id), obj.highest_detection_frame)
+
         if config.DELETE_PROCESSED_EVENTS:
             pe.event.delete()
 
@@ -265,7 +268,7 @@ def login_with_api():
 
 def update_event_filter(event_filter):
     now = datetime.datetime.now()
-    ago = now - datetime.timedelta(hours=12)
+    ago = now - datetime.timedelta(minutes=12)
     event_filter['from'] = "{}-{}-{} {}:{}:{}".format(ago.year, ago.month, ago.day, ago.hour, ago.minute,
                                                       ago.second)
     event_filter['to'] = "{}-{}-{} {}:{}:{}".format(now.year, now.month, now.day, now.hour, now.minute,

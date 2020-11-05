@@ -43,14 +43,15 @@ class CentroidTracker:
 	def reset_id_count(self):
 		self.next_id = 0
 
-	def register(self, bbox, objects, image_crop=None, score=None):
+	def register(self, bbox, objects, face_crop=None, frame=None, score=None):
 		"""
 		Arguments:
 			bbox: ndarray uint16 with bounding box info
 				[left, top, right, bottom].
 			objects: OrderedDict of ids and TrackableObjects.
-			image_crop:
+			face_crop:
 			score:
+			frame:
 		"""
 		obj = TrackableObject(0, np.asarray(bbox, dtype=np.uint16))
 		# Save the centroid pos when the object was registered
@@ -61,8 +62,8 @@ class CentroidTracker:
 		self.next_id += 1
 		# If the b.box comes from a detector, then there is a score and a
 		# cropped image associated to it
-		if (image_crop is not None) and (score is not None):
-			obj.update_highest_detection(image_crop, score)
+		if (face_crop is not None) and (score is not None):
+			obj.update_highest_detection(face_crop=face_crop, frame=frame, score=score)
 
 	def no_bbox_input(self, objects):
 		# loop over any existing tracked objects and mark them
@@ -78,9 +79,10 @@ class CentroidTracker:
 				deregistered_objects.append(deregister(obj_id, objects))
 		return deregistered_objects
 
-	def update(self, rects, objects, images=None, scores=None):
+	def update(self, rects, objects, images=None, frame=None, scores=None):
 		"""
 		Overloaded method
+		:param frame:
 		:param rects: bounding boxes [[x_left, y_top, x_right, y_bottom], ...]
 		:param objects: OrderedDictionary of id:TrackableObject.
 		:param images: List of cropped images from frame.
@@ -106,7 +108,7 @@ class CentroidTracker:
 			# and scores to each cropping
 			else:
 				for i in range(0, len(rects)):
-					self.register(rects[i], objects, images[i], scores[i])
+					self.register(rects[i], objects, face_crop=images[i], frame=frame, score=scores[i])
 			# Return an empty list since all objects are fresh
 			return []
 
@@ -172,7 +174,7 @@ class CentroidTracker:
 				# If the b.boxes came from a detector then associate the
 				# cropped image and score to this object as well
 				if images is not None and images[col] is not None:
-					objects[object_id].update_highest_detection(images[col], scores[col])
+					objects[object_id].update_highest_detection(images[col], frame, scores[col])
 
 				# Indicate that we have examined each of the row and
 				# column indexes, respectively
@@ -209,7 +211,7 @@ class CentroidTracker:
 			else:
 				for col in unused_cols:
 					if images is not None:
-						self.register(rects[col], objects, images[col], scores[col])
+						self.register(rects[col], objects, images[col], frame, scores[col])
 					else:
 						self.register(rects[col], objects)
 

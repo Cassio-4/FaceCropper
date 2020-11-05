@@ -42,7 +42,8 @@ class TrackableObject:
         self.set_bounding_box(bbox)
         # Flag used to indicate if the object is still active on the image
         self.disappeared_frames = 0
-        self.highest_detection = None
+        self.highest_detection_crop = None
+        self.highest_detection_frame = None
         self.highest_detection_score = 0.0
         self.centroid_when_registered = None
 
@@ -50,9 +51,10 @@ class TrackableObject:
         self.bounding_box = bbox
         self.centroid = centroid_from_box(bbox)
 
-    def update_highest_detection(self, image, score):
+    def update_highest_detection(self, face_crop, frame, score):
         if score > self.highest_detection_score:
-            self.highest_detection = image
+            self.highest_detection_crop = face_crop
+            self.highest_detection_frame = frame
 
 
 class ProcessedEvent:
