@@ -1,9 +1,9 @@
-from cachetools import TTLCache
+from cachetools import LRUCache
 
 
-class EventDeleterCache(TTLCache):
-    def __init__(self, maxsize, ttl, logger, delete):
-        super(EventDeleterCache, self).__init__(maxsize, ttl)
+class EventDeleterCache(LRUCache):
+    def __init__(self, maxsize, logger, delete):
+        super(EventDeleterCache, self).__init__(maxsize)
         self.logger = logger
         self.delete = delete
 
@@ -14,4 +14,4 @@ class EventDeleterCache(TTLCache):
             value.delete()
             self.logger.Info("Cache deleted event: {}".format(key))
         else:
-            self.logger.Info("Event {} expired from cache".format(key))
+            self.logger.Debug(1, "Cache full: {} deleted".format(key))

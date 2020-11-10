@@ -312,8 +312,8 @@ def run_module():
     schedule.every().day.at("00:00").do(process_passive_monitors, passive_monitors)
 
     # This is a little cache to remember what events were
-    # received in the previous calls, each cached event lasts for 15 minutes(900s)
-    events_cache = EventDeleterCache(maxsize=200, ttl=900, logger=config.LOGGER, delete=config.DELETE_PROCESSED_EVENTS)
+    # received in the previous calls
+    events_cache = EventDeleterCache(maxsize=200, logger=config.LOGGER, delete=config.DELETE_PROCESSED_EVENTS)
 
     # =============== MAIN LOOP ===============
     while True:
