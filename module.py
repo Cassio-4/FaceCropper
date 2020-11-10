@@ -196,7 +196,8 @@ def process_batch_result(batch_result, monitors):
             "appCode": 7,
             "latitude": "null",
             "longitude": "null",
-            "truePictureTree": "99"
+            "truePictureTree": "99",
+            "eventName": pe.event.name()
         }
         # If there were no detections, we will send an alarmed frame of this event
         if len(pe.objects) == 0:
@@ -232,9 +233,6 @@ def process_batch_result(batch_result, monitors):
                 if config.SAVE_DETECTIONS:
                     cv2.imwrite("output/{}{}.jpg".format(pe.event.name(), obj.id), obj.highest_detection_crop)
                     cv2.imwrite("output/trueImage{}{}.jpg".format(pe.event.name(), obj.id), obj.highest_detection_frame)
-
-        if config.DELETE_PROCESSED_EVENTS:
-            pe.event.delete()
 
 
 def login_with_api():
@@ -276,7 +274,7 @@ def update_event_filter(event_filter):
 
 
 def run_module():
-    from cachetools import TTLCache
+    from utils.cache_wrapper import EventDeleterCache
     import schedule
     import pyzm
     import time
@@ -314,8 +312,8 @@ def run_module():
     schedule.every().day.at("00:00").do(process_passive_monitors, passive_monitors)
 
     # This is a little cache to remember what events were
-    # received in the previous calls, each cached id lasts for 15 minutes(900s)
-    received_events_ids = TTLCache(maxsize=200, ttl=900)
+    # received in the previous calls, each cached event lasts for 15 minutes(900s)
+    events_cache = EventDeleterCache(maxsize=200, ttl=900, logger=config.LOGGER, delete=config.DELETE_PROCESSED_EVENTS)
 
     # =============== MAIN LOOP ===============
     while True:
@@ -331,8 +329,8 @@ def run_module():
             config.LOGGER.Debug(1, 'Getting events for {}.'.format(monitor.zm_monitor.name()))
             cam_events = monitor.zm_monitor.events(options=event_filter)
             for event in cam_events.list():
-                if event.id() not in received_events_ids:
-                    received_events_ids[event.id()] = event.id()
+                if event.id() not in events_cache:
+                    events_cache[event.id()] = event
                     event_batch.append(event)
                     config.LOGGER.Debug(1, 'Event:{} Cause:{} Notes:{}'.format(event.name(),
                                                                                event.cause(), event.notes()))
