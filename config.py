@@ -33,8 +33,11 @@ if RUN_TEST:
 
 else:
     # Mounting list of passive monitors from config file
-    passive_monitors_string = config['ZMInfo']['passive_monitors_list'].split(',')
-    PASSIVE_MONITORS = tuple([int(m) for m in passive_monitors_string])
+    try:
+        passive_monitors_string = config['ZMInfo']['passive_monitors_list'].split(',')
+        PASSIVE_MONITORS = tuple([int(m) for m in passive_monitors_string])
+    except ValueError:
+        PASSIVE_MONITORS = ()
     API_URL = config['ZMInfo']['apiurl']
     PORTAL_URL = config['ZMInfo']['portalurl']
     USER = config['ZMInfo']['user']

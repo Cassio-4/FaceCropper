@@ -28,10 +28,15 @@ class Logger:
             log.write(json.dumps(message, indent=2))
             log.write("\n")
 
-    def log_detector(self, event_name, obj_num, caller=None):
+    def log_detector(self, event_name, obj_num, event_frames, processed_frames):
         dt = datetime.now().strftime(self.dtformat)
         with open('output/detection_log.txt', 'a+') as log:
-            log.write('[{}]{} processed: {} objects found\n'. format(dt, event_name, obj_num))
+            log.write('[{}] {} {{\n'.format(dt, event_name))
+            if self.debug:
+                log.write('    total_frames = {}\n'.format(event_frames))
+                log.write('    processed_frames = {}\n'.format(processed_frames))
+            log.write('    objects_found = {}\n'.format(obj_num))
+            log.write("}\n")
 
     def Debug(self, level, message, caller=None):
         if self.debug:

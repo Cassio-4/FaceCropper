@@ -1,4 +1,5 @@
 from cachetools import LRUCache
+from requests import HTTPError
 
 
 class EventDeleterCache(LRUCache):
@@ -10,8 +11,12 @@ class EventDeleterCache(LRUCache):
     def popitem(self):
         key, value = super().popitem()
         # Value should be a zm event object
-        if self.delete:
-            value.delete()
-            self.logger.Info("Cache deleted event: {}".format(key))
-        else:
-            self.logger.Debug(1, "Cache full: {} deleted".format(key))
+        try:
+            if self.delete:
+                value.delete()
+                self.logger.Info("Cache deleted event: {}".format(key))
+            else:
+                self.logger.Debug(1, "Cache full: {} deleted".format(key))
+        except HTTPError as e:
+            self.logger.Error("Failed to delete {}, HTTPError".format(value.name()))
+

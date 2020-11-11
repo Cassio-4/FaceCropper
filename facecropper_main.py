@@ -6,6 +6,6 @@ if __name__ == "__main__":
         print("[MAIN] Running test")
         run_test()
     else:
-        from module import run_module
+        from module.zm_entry_layer import run_module
         print("[MAIN] Starting FaceCropper module")
         run_module()
