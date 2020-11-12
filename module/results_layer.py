@@ -6,7 +6,7 @@ import json
 import cv2
 
 
-def encode_image_base64(image):
+def encode_image_base64(image, event_name, cropped):
     # Encode the highest scoring image in base64 to be sent in a JSON request
     # https://stackoverflow.com/questions/40928205/python-opencv-image-to-byte-string-for-json-transfer
     try:
@@ -15,7 +15,10 @@ def encode_image_base64(image):
         b64_image_with_prefix = "data:image/png;base64," + b64_image.decode("utf-8")
         return b64_image_with_prefix
     except cv2.error as e:
-        config.LOGGER.Error(e)
+        if cropped:
+            config.LOGGER.Error("{} encoding error on face crop: ".format(event_name) + e)
+        else:
+            config.LOGGER.Error("{} encoding error on alarm frame: ".format(event_name) + e)
         return None
 
 
@@ -23,7 +26,7 @@ def send_packet(packet):
     headers = {'content-type': 'application/json; charset=UTF-8'}
     config.LOGGER.log_JSON(packet)
     try:
-        response = requests.post('https://www.atento.inf.br/api', data=json.dumps(packet),
+        response = requests.post('http://localhost/api', data=json.dumps(packet),
                                  headers=headers, verify=False)
     except Timeout:
         config.LOGGER.Error("Request Timed Out.")
@@ -58,14 +61,18 @@ def process_batch_result(batch_result, monitors):
             "truePictureTree": "99",
             "eventName": pe.event.name()
         }
+
         # If there were no detections, we will send an alarmed frame of this event
         if len(pe.objects) == 0:
             packet["flagFace"] = 0
-            packet["trueImage"] = encode_image_base64(pe.alarmed_frame)
+            packet["trueImage"] = encode_image_base64(pe.alarmed_frame, pe.event.name(), cropped=False)
+
             if packet["trueImage"] is None:
                 config.LOGGER.Error("unable to encode image")
                 continue
+
             send_packet(packet)
+
         # If there were detections, flagFace = 1 and send image
         else:
             # For each detection in this event
@@ -73,8 +80,8 @@ def process_batch_result(batch_result, monitors):
             packet["personalType"] = 1
             for obj in pe.objects:
                 # Add to JSON
-                packet["trueImage"] = encode_image_base64(obj.highest_detection_frame)
-                packet["cropFace"] = encode_image_base64(obj.highest_detection_crop)
+                packet["trueImage"] = encode_image_base64(obj.highest_detection_frame, pe.event.name(), cropped=False)
+                packet["cropFace"] = encode_image_base64(obj.highest_detection_crop, pe.event.name(), cropped=True)
                 if packet["trueImage"] is None:
                     config.LOGGER.Error("unable to encode image")
                     continue

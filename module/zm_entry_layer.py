@@ -77,8 +77,6 @@ def login_with_api():
     if config.DISABLE_SSL:
         api_options['disable_ssl_cert_check'] = True
 
-    config.LOGGER.Info('Running FaceCropper on {}'.format(api_options['apiurl']))
-
     # lets init the API
     try:
         zmapi = zmapi.ZMApi(options=api_options)
@@ -87,12 +85,14 @@ def login_with_api():
         print(traceback.format_exc())
         exit(1)
 
+    config.LOGGER.Info('Running FaceCropper on {}'.format(api_options['apiurl']))
+
     return zmapi
 
 
 def update_event_filter(event_filter):
     now = datetime.datetime.now()
-    ago = now - datetime.timedelta(hours=5)
+    ago = now - datetime.timedelta(minutes=12)
     event_filter['from'] = "{}-{}-{} {}:{}:{}".format(ago.year, ago.month, ago.day, ago.hour, ago.minute,
                                                       ago.second)
     event_filter['to'] = "{}-{}-{} {}:{}:{}".format(now.year, now.month, now.day, now.hour, now.minute,
