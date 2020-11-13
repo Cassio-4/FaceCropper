@@ -117,7 +117,7 @@ def run_module():
     }
 
     # This is a cache to remember what events were received in the previous calls
-    events_cache = EventDeleterCache(maxsize=10, logger=config.LOGGER, delete=config.DELETE_PROCESSED_EVENTS)
+    events_cache = EventDeleterCache(maxsize=50, logger=config.LOGGER, delete=config.DELETE_PROCESSED_EVENTS)
     # =============== MAIN LOOP ===============
     while True:
         config.LOGGER.Info("Pooling for events")
