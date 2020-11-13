@@ -15,17 +15,26 @@ def encode_image_base64(image, event_name, cropped, num=None):
         if cropped:
             config.LOGGER.Error("{} PNG encoding error on face crop {{\n".format(event_name) +
                                 "    object num = {}\n".format(num) +
-                                "    image shape = {}\n}}".format(image.shape))
-            cv2.imwrite("output/{}face{}.jpg".format(event_name, num), image)
+                                "    image shape = {}\n}}".format(image))
+            try:
+                cv2.imwrite("output/{}face{}.jpg".format(event_name, num), image)
+            except cv2.error:
+                config.LOGGER.Error("is {} image {} empty?".format(event_name, num))
         elif num is not None:
             config.LOGGER.Error("{} PNG encoding error on trueImage {{\n".format(event_name) +
                                 "    object num = {}\n".format(num) +
-                                "    image shape = {}\n}}".format(image.shape))
-            cv2.imwrite("output/{}trueImage{}.jpg".format(event_name, num), image)
+                                "    image shape = {}\n}}".format(image))
+            try:
+                cv2.imwrite("output/{}trueImage{}.jpg".format(event_name, num), image)
+            except cv2.error:
+                config.LOGGER.Error("is {} trueImage {} empty?".format(event_name, num))
         else:
             config.LOGGER.Error("{} PNG encoding error on alarm frame {{\n".format(event_name) +
-                                "    image shape = {}\n}}".format(image.shape))
-            cv2.imwrite("output/{}alarm.jpg".format(event_name), image)
+                                "    image shape = {}\n}}".format(image))
+            try:
+                cv2.imwrite("output/{}alarm.jpg".format(event_name), image)
+            except cv2.error:
+                config.LOGGER.Error("is {} alarm frame empty?".format(event_name))
         return None
     try:
         b64_image = base64.b64encode(buffer)
@@ -64,6 +73,7 @@ def process_batch_result(batch_result, monitors):
     """
     # For processed event in a batch result
     for pe in batch_result:
+        config.LOGGER.Info("Creating JSON for {}.".format(pe.event.name()))
         # Grab this event's monitor name
         monitor_name = monitors.get(pe.event.monitor_id()).name()
         # Fill the common parts of the request
@@ -120,3 +130,4 @@ def process_batch_result(batch_result, monitors):
                 if config.SAVE_DETECTIONS:
                     cv2.imwrite("output/{}{}.jpg".format(pe.event.name(), obj.id), obj.highest_detection_crop)
                     cv2.imwrite("output/trueImage{}{}.jpg".format(pe.event.name(), obj.id), obj.highest_detection_frame)
+        config.LOGGER.Info("Creating JSON for {}: Done.".format(pe.event.name()))
