@@ -5,6 +5,25 @@ import dlib
 import cv2
 
 
+def crop_detection(frame, video_W, video_H, left_x, top_y, right_x, bottom_y):
+    aux_top_y = top_y
+    aux_bottom_y = bottom_y
+    aux_left_x = left_x
+    aux_right_x = right_x
+
+    if top_y - 5 < 0:
+        aux_top_y = 0
+    if bottom_y - 5 > video_H:
+        aux_bottom_y = int(video_H)
+    if left_x - 5 < 0:
+        aux_left_x = 0
+    if right_x + 5 > video_W:
+        aux_right_x = int(video_W)
+
+    crop = frame[aux_top_y:aux_bottom_y, aux_left_x:aux_right_x]
+    return crop
+
+
 def process_video(event):
     # Get file system path where event's video is stored
     path = event.fspath() + '/' + "%05d-capture.jpg"
@@ -12,7 +31,9 @@ def process_video(event):
     config.LOGGER.Debug(1, "Opening video at {}".format(path))
     vc = cv2.VideoCapture(path)
     config.LOGGER.Debug(1, "Opening video at {}: Done".format(path))
-
+    W = vc.get(cv2.CAP_PROP_FRAME_WIDTH)
+    H = vc.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    print("Video has width {} and Height{}".format(W, H))
     # Ordered dictionary of Trackable Objects
     to = OrderedDict()
 
@@ -52,7 +73,7 @@ def process_video(event):
                 trackers.append(tracker)
                 # Add the bounding box coordinates to the rectangles list
                 rects.append((left_x, top_y, right_x, bottom_y))
-                crop_img = frame[top_y - 5:bottom_y + 5, left_x - 5:right_x + 5]
+                crop_img = crop_detection(frame, W, H, left_x, top_y, right_x, bottom_y)
                 crops.append(crop_img)
 
             # Update each object based on recent detections

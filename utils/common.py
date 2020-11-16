@@ -55,6 +55,7 @@ class TrackableObject:
         if score > self.highest_detection_score:
             self.highest_detection_crop = face_crop
             self.highest_detection_frame = frame
+            self.highest_detection_score = score
 
 
 class ProcessedEvent:
