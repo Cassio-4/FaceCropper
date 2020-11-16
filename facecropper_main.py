@@ -2,7 +2,7 @@ if __name__ == "__main__":
     from config import RUN_TEST
 
     if RUN_TEST:
-        from test import run_test
+        from test_on_event.test import run_test
         print("[MAIN] Running test")
         run_test()
     else:

@@ -53,7 +53,7 @@ class CentroidTracker:
 			score:
 			frame:
 		"""
-		obj = TrackableObject(0, np.asarray(bbox, dtype=np.uint16))
+		obj = TrackableObject(self.next_id, np.asarray(bbox, dtype=np.uint16))
 		# Save the centroid pos when the object was registered
 		obj.centroid_when_registered = obj.centroid
 		# Save the new TrackableObject in the dictionary
@@ -81,7 +81,6 @@ class CentroidTracker:
 
 	def update(self, rects, objects, images=None, frame=None, scores=None):
 		"""
-		Overloaded method
 		:param frame:
 		:param rects: bounding boxes [[x_left, y_top, x_right, y_bottom], ...]
 		:param objects: OrderedDictionary of id:TrackableObject.
@@ -204,11 +203,17 @@ class CentroidTracker:
 					# for warrants deregistering the object
 					if objects[object_id].disappeared_frames > self.maxDisappeared:
 						deregistered_objects.append(deregister(object_id, objects))
+				# This is a gambiarra I have no idea why it's here but it fixed
+				# the None type obejct being created lol
+				if images is not None:
+					for col in unused_cols:
+						self.register(rects[col], objects, images[col], frame, scores[col])
 
 			# otherwise, if the number of input centroids is greater
 			# than the number of existing object centroids we need to
 			# register each new input centroid as a trackable object
 			else:
+				print(unused_cols)
 				for col in unused_cols:
 					if images is not None:
 						self.register(rects[col], objects, images[col], frame, scores[col])
