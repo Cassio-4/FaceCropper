@@ -33,7 +33,6 @@ def process_video(event):
     config.LOGGER.Debug(1, "Opening video at {}: Done".format(path))
     W = vc.get(cv2.CAP_PROP_FRAME_WIDTH)
     H = vc.get(cv2.CAP_PROP_FRAME_HEIGHT)
-    print("Video has width {} and Height{}".format(W, H))
     # Ordered dictionary of Trackable Objects
     to = OrderedDict()
 

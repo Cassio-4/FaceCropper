@@ -213,7 +213,6 @@ class CentroidTracker:
 			# than the number of existing object centroids we need to
 			# register each new input centroid as a trackable object
 			else:
-				print(unused_cols)
 				for col in unused_cols:
 					if images is not None:
 						self.register(rects[col], objects, images[col], frame, scores[col])
