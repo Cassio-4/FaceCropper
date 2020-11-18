@@ -8,13 +8,14 @@ class FaceboxesTensorflow:
     Kudos to:
     https://github.com/TropComplique/FaceBoxes-tensorflow/blob/master/try_detector.ipynb
     """
-    def __init__(self, model_path, gpu_memory_fraction=0.25, visible_device_list='0'):
+    def __init__(self, model_path, gpu_memory_fraction=0.25, visible_device_list='0', score_threshold=0.5):
         """
         Arguments:
             model_path: a string, path to a pb file.
             gpu_memory_fraction: a float number.
             visible_device_list: a string.
         """
+        self.score_threshold = score_threshold
         with tf.io.gfile.GFile(model_path, 'rb') as f:
             graph_def = tf.compat.v1.GraphDef()
             graph_def.ParseFromString(f.read())
@@ -37,12 +38,11 @@ class FaceboxesTensorflow:
         config_proto = tf.compat.v1.ConfigProto(gpu_options=gpu_options, log_device_placement=False)
         self.sess = tf.compat.v1.Session(graph=graph, config=config_proto)
 
-    def detect(self, image, score_threshold=0.5):
+    def detect(self, image):
         """Detect faces.
         Arguments:
             image: a numpy uint8 array with shape [height, width, 3],
                 that represents a RGB image.
-            score_threshold: a float number.
         Returns:
             boxes: a unsigned16 numpy array of shape [num_faces, 4].
             scores: a float numpy array of shape [num_faces].
@@ -58,7 +58,7 @@ class FaceboxesTensorflow:
         boxes = boxes[0][:num_boxes]
         scores = scores[0][:num_boxes]
 
-        to_keep = scores > score_threshold
+        to_keep = scores > self.score_threshold
         boxes = boxes[to_keep]
         scores = scores[to_keep]
 

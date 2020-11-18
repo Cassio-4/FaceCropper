@@ -11,7 +11,8 @@ print("[Global] reading config file: Done")
 # Instantiate face detector
 print("[Global] Instantiating face detector")
 print("[Global] Using FaceBoxes model.")
-FACE_DETECTOR = FaceboxesTensorflow(config['FaceboxesTensorflow']['weights_path'])
+FACE_DETECTOR = FaceboxesTensorflow(config['FaceboxesTensorflow']['weights_path'],
+                                    config['FaceboxesTensorflow'].getboolean('score_threshold'))
 print("[Global] Instantiating face detector: Done")
 
 # Instantiate Centroid Tracker for ID assignment

@@ -60,6 +60,7 @@ def send_packet(packet):
         config.LOGGER.Error("Connection error.")
     else:
         config.LOGGER.log_JSON(response.content.decode('utf-8'))
+        config.LOGGER.Info("ATENTO message: {}".format(response.json()["message"]))
 
 
 def process_batch_result(batch_result, monitors):
