@@ -137,4 +137,6 @@ def run_module():
         process_batch_result(batch_result, active_monitors)
 
         for pe in batch_result:
-            events_cache[pe.event.id()] = pe.event
+            pe.cleanup()
+            if not pe.get_callback_state():
+                events_cache[pe.event.id()] = pe

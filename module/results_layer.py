@@ -3,64 +3,46 @@ import requests
 import base64
 import config
 import json
+from json import JSONDecodeError
 import cv2
 
 
-def encode_image_base64(image, event_name, cropped, num=None):
+def encode_image_base64(image):
     # Encode the highest scoring image in base64 to be sent in a JSON request
     # https://stackoverflow.com/questions/40928205/python-opencv-image-to-byte-string-for-json-transfer
     try:
         _, buffer = cv2.imencode('.png', image)
-    except cv2.error as e:
-        if cropped:
-            config.LOGGER.Error("{} PNG encoding error on face crop {{\n".format(event_name) +
-                                "    object num = {}\n".format(num) +
-                                "    image shape = {}\n}}".format(image))
-            try:
-                cv2.imwrite("output/{}face{}.jpg".format(event_name, num), image)
-            except cv2.error:
-                config.LOGGER.Error("is {} image {} empty?".format(event_name, num))
-        elif num is not None:
-            config.LOGGER.Error("{} PNG encoding error on trueImage {{\n".format(event_name) +
-                                "    object num = {}\n".format(num) +
-                                "    image shape = {}\n}}".format(image))
-            try:
-                cv2.imwrite("output/{}trueImage{}.jpg".format(event_name, num), image)
-            except cv2.error:
-                config.LOGGER.Error("is {} trueImage {} empty?".format(event_name, num))
-        else:
-            config.LOGGER.Error("{} PNG encoding error on alarm frame {{\n".format(event_name) +
-                                "    image shape = {}\n}}".format(image))
-            try:
-                cv2.imwrite("output/{}alarm.jpg".format(event_name), image)
-            except cv2.error:
-                config.LOGGER.Error("is {} alarm frame empty?".format(event_name))
-        return None
-    try:
         b64_image = base64.b64encode(buffer)
         b64_image_with_prefix = "data:image/png;base64," + b64_image.decode("utf-8")
-        return b64_image_with_prefix
+    except cv2.error as e:
+        config.LOGGER.Error("PNG CV2 encoding error {{\n" +
+                            "    image shape = {}\n}}".format(image))
+        return None
     except Exception:
-        if cropped:
-            config.LOGGER.Error("{} Base64 encoding error on face crop: ".format(event_name))
-        else:
-            config.LOGGER.Error("{} Base64 encoding error on alarm frame: ".format(event_name))
+        config.LOGGER.Error("Base64 encoding error.")
         return None
 
+    return b64_image_with_prefix
 
-def send_packet(packet):
-    headers = {'content-type': 'application/json; charset=UTF-8'}
+
+def send_packet(packet, pe):
     config.LOGGER.log_JSON(packet)
     try:
         response = requests.post('http://localhost/api', data=json.dumps(packet),
-                                 headers=headers, verify=False)
+                                 headers={'content-type': 'application/json; charset=UTF-8'}, verify=False)
+        config.LOGGER.log_JSON(response.content.decode('utf-8'))
+        config.LOGGER.Info("ATENTO status: {}".format(int(response.json()["status"])))
+
+        pe.set_keep_video(True if response.json()["video"] == "true" else False)
+
     except Timeout:
         config.LOGGER.Error("Request Timed Out.")
+        pe.set_callback(True)
     except ConnectionError:
         config.LOGGER.Error("Connection error.")
-    else:
-        config.LOGGER.log_JSON(response.content.decode('utf-8'))
-        config.LOGGER.Info("ATENTO message: {}".format(response.json()["message"]))
+        pe.set_callback(True)
+    except JSONDecodeError:
+        config.LOGGER.Error("Json Decode error.")
 
 
 def process_batch_result(batch_result, monitors):
@@ -93,42 +75,36 @@ def process_batch_result(batch_result, monitors):
         # If there were no detections, we will send an alarmed frame of this event
         if len(pe.objects) == 0:
             packet["flagFace"] = 0
-            packet["trueImage"] = encode_image_base64(pe.alarmed_frame, pe.event.name(), cropped=False)
+            packet["trueImage"] = encode_image_base64(pe.alarmed_frame)
 
             if packet["trueImage"] is None:
                 config.LOGGER.Error("{} 's alarm frame encoding error: Callback".format(pe.event.name()))
+                pe.set_callback(True)
                 continue
 
-            send_packet(packet)
+            send_packet(packet, pe)
 
-        # If there were detections, flagFace=1 and send image
+        # If there were detections
         else:
             # For each detection in this event
             packet["flagFace"] = 1
             packet["personalType"] = 1
             for num, obj in enumerate(pe.objects):
                 # Add to JSON
-                packet["trueImage"] = encode_image_base64(obj.highest_detection_frame, pe.event.name(), cropped=False, num=num)
-                packet["cropFace"] = encode_image_base64(obj.highest_detection_crop, pe.event.name(), cropped=True, num=num)
+                packet["trueImage"] = encode_image_base64(obj.highest_detection_frame)
+                packet["cropFace"] = encode_image_base64(obj.highest_detection_crop)
                 if packet["trueImage"] is None:
                     config.LOGGER.Error("{} error encoding detection number {}'s trueImage".format(pe.event.name(),
                                                                                                    str(num)))
-                    callback = True
+                    pe.set_callback(True)
+                    continue
                 if packet["cropFace"] is None:
                     config.LOGGER.Error("{} error encoding detection number {}'s cropFace".format(pe.event.name(),
                                                                                                   str(num)))
-                    callback = True
+                    pe.set_callback(True)
                     continue
 
-                # packet["atributesPerson"] = [{"atribute": "Age", "value": 31},
-                #                            {"atribute": "Color", "value": 1},
-                #                            {"atribute": "Sex", "value": "1"},
-                #                            {"atribute": "Direction", "value": 2}]
-
                 # Send it to ATENTO API
-                send_packet(packet)
+                send_packet(packet, pe)
 
-                if config.SAVE_DETECTIONS:
-                    cv2.imwrite("output/{}{}.jpg".format(pe.event.name(), obj.id), obj.highest_detection_crop)
-                    cv2.imwrite("output/trueImage{}{}.jpg".format(pe.event.name(), obj.id), obj.highest_detection_frame)
         config.LOGGER.Info("Creating JSON for {}: Done.".format(pe.event.name()))

@@ -13,8 +13,9 @@ class EventDeleterCache(LRUCache):
         # Value should be a zm event object
         try:
             if self.delete:
-                value.delete()
-                self.logger.Info("Cache deleted ZM event: {}".format(key))
+                if not value.get_keep_video:
+                    value.event.delete()
+                    self.logger.Info("Cache deleted ZM event: {}".format(key))
             else:
                 self.logger.Debug(1, "Cache full: releasing {}".format(key))
         except HTTPError as e:

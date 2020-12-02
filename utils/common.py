@@ -67,3 +67,39 @@ class ProcessedEvent:
         self.event = event
         self.objects = objects
         self.alarmed_frame = alarmed_frame
+        self.__callback = False
+        self.__keep_video = False
+
+    def set_callback(self, state):
+        """
+        Sets the status of this ProcessedEvent. If True, the event will be considered
+        incomplete and will not be inserted into cache. This way it will be received again on the next ZMAPI call.
+        :param state: boolean representing the callback status of this event.
+        :return:
+        """
+        self.__callback = bool(state)
+
+    def get_callback_state(self):
+        return self.__callback
+
+    def set_keep_video(self, keep_video):
+        """
+        Checks and saves if this event is to be deleted from Zoneminder or not
+        :param keep_video: Boolean
+        :return:
+        """
+        if keep_video is True:
+            self.__keep_video = keep_video
+
+    def get_keep_video(self):
+        return self.__keep_video
+
+    def cleanup(self):
+        """
+        This method cleans the objects and alarmed_frame attributes, only call this once it
+        has been appropriately processed and sent up to the API. I'm not sure if this actually saves
+        memory during execution time or not, Hope it does but it clearly deserves more research
+        :return:
+        """
+        del self.objects
+        del self.alarmed_frame
