@@ -19,5 +19,5 @@ class EventDeleterCache(LRUCache):
             else:
                 self.logger.Debug(1, "Cache full: releasing {}".format(key))
         except HTTPError as e:
-            self.logger.Error("Failed to delete {} on ZM: ".format(value.name()))
+            self.logger.Error("Failed to delete {} on ZM: ".format(value.event.name()))
 
