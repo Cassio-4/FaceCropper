@@ -33,7 +33,9 @@ def send_packet(packet, pe):
         config.LOGGER.log_JSON(response.content.decode('utf-8'))
         config.LOGGER.Info("ATENTO status: {}".format(int(response.json()["status"])))
 
-        pe.set_keep_video(True if response.json()["video"] == "true" else False)
+        if response.json()["video"] == "true":
+            pe.set_keep_video(True)
+            config.LOGGER.Info("Event {} alert!, keeping video.".format(pe.event.name()))
 
     except Timeout:
         config.LOGGER.Error("Request Timed Out.")

@@ -13,7 +13,7 @@ class EventDeleterCache(LRUCache):
         # Value should be a zm event object
         try:
             if self.delete:
-                if not value.get_keep_video:
+                if not value.get_keep_video():
                     value.event.delete()
                     self.logger.Info("Cache deleted ZM event: {}".format(key))
             else:

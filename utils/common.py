@@ -89,7 +89,7 @@ class ProcessedEvent:
         :return:
         """
         if keep_video is True:
-            self.__keep_video = keep_video
+            self.__keep_video = bool(keep_video)
 
     def get_keep_video(self):
         return self.__keep_video
