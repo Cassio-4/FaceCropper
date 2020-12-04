@@ -28,12 +28,13 @@ def encode_image_base64(image):
 def send_packet(packet, pe):
     config.LOGGER.log_JSON(packet)
     try:
+
         response = requests.post('http://localhost/api', data=json.dumps(packet),
                                  headers={'content-type': 'application/json; charset=UTF-8'}, verify=False)
         config.LOGGER.log_JSON(response.content.decode('utf-8'))
         config.LOGGER.Info("ATENTO status: {}".format(int(response.json()["status"])))
 
-        if response.json()["video"] == "true":
+        if response.json()["video"]:
             pe.set_keep_video(True)
             config.LOGGER.Info("Event {} alert!, keeping video.".format(pe.event.name()))
 
